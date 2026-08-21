@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# MLops-n1-project
-=======
 # MLOps N1 — California Housing
 
 Projet MLOps complet avec trois machines dédiées :
