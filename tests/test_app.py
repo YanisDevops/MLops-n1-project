@@ -46,7 +46,7 @@ def test_predict(client):
     response = client.post("/predict", json=payload)
     assert response.status_code == 200
     body = response.json()
-    assert body["predicted_price"] == pytest.approx(4.526)
+    assert body["prediction"] == pytest.approx(4.526)
     assert body["model_version"] == "1"
 
 
