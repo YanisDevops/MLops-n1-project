@@ -159,4 +159,3 @@ push main
 - SSH limité à l'IP de l'administrateur
 - MLflow 5000 à limiter aux SG Training/Serving
 - Serving 8000 ouvert publiquement uniquement pour le lab
->>>>>>> 52eafc8 (Initial MLOps project)
