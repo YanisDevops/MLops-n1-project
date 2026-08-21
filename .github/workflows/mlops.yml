@@ -62,5 +62,16 @@ jobs:
             docker stop california-housing-api || true
             docker rm california-housing-api || true
             docker run -d --name california-housing-api --restart unless-stopped -p 8000:8000               -e MLFLOW_TRACKING_URI="${{ secrets.MLFLOW_TRACKING_URI }}"               -e AWS_DEFAULT_REGION="$REGION"               "$IMAGE_URI"
-            sleep 10
-            curl -f http://localhost:8000/health
+            for i in {1..12}; do
+              if curl -f http://localhost:8000/health; then
+                echo "API is healthy"
+                exit 0
+              fi
+
+              echo "Waiting for API... ($i/12)"
+              sleep 5
+            done
+
+            echo "API failed to start"
+            docker logs california-housing-api
+            exit 1
