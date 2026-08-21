@@ -1,0 +1,66 @@
+name: MLOps N1 - Test Build Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: california-housing-api
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest tests/ -v
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      image_uri: ${{ steps.build.outputs.image_uri }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+      - id: build
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          IMAGE_URI="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVING_EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SERVING_EC2_SSH_KEY }}
+          script: |
+            set -e
+            IMAGE_URI="${{ needs.build.outputs.image_uri }}"
+            REGION="${{ env.AWS_REGION }}"
+            aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
+            docker pull "$IMAGE_URI"
+            docker stop california-housing-api || true
+            docker rm california-housing-api || true
+            docker run -d --name california-housing-api --restart unless-stopped -p 8000:8000               -e MLFLOW_TRACKING_URI="${{ secrets.MLFLOW_TRACKING_URI }}"               -e AWS_DEFAULT_REGION="$REGION"               "$IMAGE_URI"
+            sleep 10
+            curl -f http://localhost:8000/health
